@@ -1,0 +1,49 @@
+[package]
+name = "esp-totp-rs"
+version = "0.1.0"
+authors = ["Frido Koch <info@fridokoch.de>"]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+defmt = "0.3.8"
+ds323x = { version = "0.5.1" }
+embedded-sdmmc = "0.8.0"
+esp-backtrace = { version = "0.13.0", features = [
+    "esp32s3",
+    "exception-handler",
+    "panic-handler",
+    "println",
+] }
+esp-hal = { git = "https://github.com/esp-rs/esp-hal", rev = "5d6354ccbd62527452968074c4a92a4fc6c6a635", features = ["esp32s3", "embedded-hal-02", "embedded-hal", "opsram-8m"] }
+# esp-hal = { version = "0.19.0", features = ["esp32s3", "embedded-hal-02", "embedded-hal", "opsram-8m"] }
+esp-println = { version = "0.10.0", features = ["esp32s3", "log"] }
+hd44780-driver = { git = "https://github.com/JohnDoneth/hd44780-driver", branch = "master" }
+log = { version = "0.4.21" }
+embedded-hal = "1.0.0"
+embedded-hal-bus = "0.2.0"
+hmac = "0.12.1"
+digest = "0.10.7"
+esp-alloc = { version = "0.4.0" }
+data-encoding = { version = "2.6.0", default-features = false, features = ["alloc"] }
+aes = "0.8.4"
+ctr = "0.9.2"
+serde = { version = "1.0", default-features = false, features = ["derive", "alloc"] }
+serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+rotary-encoder-embedded = "0.3.1"
+critical-section = "1.1.2"
+scopeguard = { version = "1.2.0", default-features = false }
+fugit = "0.3.7"
+[profile.dev]
+# Rust debug is too slow.
+# For debug builds always builds with some optimization
+opt-level = "s"
+
+[profile.release]
+codegen-units = 1 # LLVM can perform better optimizations using a single thread
+debug = 2
+debug-assertions = false
+incremental = false
+lto = 'fat'
+opt-level = 's'
+overflow-checks = false
