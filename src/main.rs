@@ -15,10 +15,11 @@ use esp_hal::{
     Blocking, clock::ClockControl, delay::Delay, gpio, interrupt, peripherals::Peripherals,
     prelude::*, psram, system::SystemControl, time,
 };
+use esp_hal::analog::adc::{Adc, AdcConfig, AdcPin, Attenuation};
 use esp_hal::gpio::{AnyOutput, Event, Input, Io, Level, Pull};
 use esp_hal::i2c::I2C;
 use esp_hal::interrupt::Priority;
-use esp_hal::peripherals::{Interrupt, TIMG0};
+use esp_hal::peripherals::{ADC2, Interrupt, TIMG0};
 use esp_hal::timer::timg::{Timer, Timer0, TimerGroup};
 use rotary_encoder_embedded::{Direction, RotaryEncoder};
 use rotary_encoder_embedded::standard::StandardMode;
@@ -135,6 +136,10 @@ static TIMER0: GlobalOpt<Timer<Timer0<TIMG0>, Blocking>> = Mutex::new(RefCell::n
 
 static DISPLAY: GlobalOpt<Display> = Mutex::new(RefCell::new(None));
 
+static ADC: GlobalOpt<Adc<ADC2>> = Mutex::new(RefCell::new(None));
+static ADC_PIN: GlobalOpt<AdcPin<gpio::Gpio14, ADC2, esp_hal::analog::adc::AdcCalBasic<ADC2>>> =
+    Mutex::new(RefCell::new(None));
+
 #[entry]
 fn main() -> ! {
     esp_println::logger::init_logger_from_env();
@@ -179,10 +184,22 @@ fn main() -> ! {
         AnyOutput::new(io.pins.gpio9, Level::Low),
         delay,
     );
-
-    //display.render_auth(0, [0i8; 6]);
     critical_section::with(|cs| {
         DISPLAY.borrow_ref_mut(cs).replace(display);
+    });
+
+    //
+    // ADC
+    //
+    let mut config = AdcConfig::new();
+    let adc_pin = config.enable_pin_with_cal::<_, esp_hal::analog::adc::AdcCalBasic<ADC2>>(
+        io.pins.gpio14,
+        Attenuation::Attenuation11dB,
+    );
+    let adc = Adc::new(peripherals.ADC2, config);
+    critical_section::with(|cs| {
+        ADC.borrow_ref_mut(cs).replace(adc);
+        ADC_PIN.borrow_ref_mut(cs).replace(adc_pin);
     });
 
     //
@@ -451,10 +468,26 @@ fn update_token(cs: CriticalSection) {
             }
         }
         Mode::Init => {
+            // read voltage
+            let mut adc = ADC.borrow_ref_mut(cs);
+            let adc = adc.as_mut().unwrap();
+            let mut adc_pin = ADC_PIN.borrow_ref_mut(cs);
+            let mut adc_pin = adc_pin.as_mut().unwrap();
+
+            let v = nb::block!(adc.read_oneshot(&mut adc_pin)).unwrap();
+            let v = ((v as f32) * 2.0) / 1000.0;
+
             let now = gen.datetime();
             display.write_clear(
                 (0, 0),
-                format!("{:02}.{:02}.{:02}", now.day(), now.month(), now.year(),).as_str(),
+                format!(
+                    "{:02}.{:02}.{:02} {:.2}V",
+                    now.day(),
+                    now.month(),
+                    now.year(),
+                    v
+                )
+                .as_str(),
             );
             display.write(
                 (0, 1),
